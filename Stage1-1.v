@@ -34,6 +34,51 @@ Inductive ErrorNat :=
 Inductive ErrorBool :=
   | error_bool : ErrorBool
   | boolean : bool -> ErrorBool.
+Coercion num: nat >-> ErrorNat.
+Coercion boolean: bool >-> ErrorBool.
+Inductive Result :=
+  | err_undecl : Result
+  | err_assign : Result
+  | default : Result
+  | res_nat : ErrorNat -> Result
+  | res_bool : ErrorBool -> Result
+  | res_string : string -> Result.
+  
+Scheme Equality for Result.
+
+
+Definition Env := string -> Result.
+
+Definition env : Env := fun x => err_undecl.
+
+Definition check_eq_over_types (t1 : Result) (t2 : Result) : bool :=
+  match t1 with
+    | err_undecl => match t2 with
+                    |err_undecl => true
+                    | _ => false
+                    end
+    | err_assign => match t2 with 
+                     | err_assign => true
+                     | _ => false
+                     end
+    |default => match t2 with
+                     | default => true
+                     | _ => false
+                      end
+    |res_nat n  => match t2 with
+                     | res_nat a => true
+                     | _ => false
+                      end
+    |res_bool n => match t2 with
+                     | res_bool a => true
+                     | _ => false
+                      end
+   |res_string a => match t2 with
+                     | res_string b => true
+                     | _ => false
+                      end
+  end.
+Compute (check_eq_over_types (res_bool (boolean true)) (res_nat 100)).
 
 Inductive AExp :=
   | avar: string -> AExp 
@@ -50,6 +95,7 @@ Inductive BExp :=
   | bfalse
   | bvar: string -> BExp
   | blt : AExp -> AExp -> BExp
+  | bgt : AExp -> AExp -> BExp
   | bnot : BExp -> BExp
   | band : BExp -> BExp -> BExp
   | bor : BExp -> BExp -> BExp.
