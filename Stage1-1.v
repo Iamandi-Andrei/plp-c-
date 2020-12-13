@@ -246,3 +246,67 @@ Fixpoint beval_fun (a : BExp) (envnat : Env) : ErrorBool :=
   | band b1 b2 => (and_ErrorBool (beval_fun b1 envnat) (beval_fun b2 envnat))
   | bor b1 b2 => (or_ErrorBool (beval_fun b1 envnat) (beval_fun b2 envnat))
   end.
+
+Inductive Stmt :=
+  | nat_decl: string -> AExp -> Stmt 
+  | bool_decl: string -> BExp -> Stmt 
+  | string_decl : string ->Stmt
+  | nat_assign : string -> AExp -> Stmt 
+  | bool_assign : string -> BExp -> Stmt 
+  | string_assign : string -> string ->Stmt
+  | sequence : Stmt -> Stmt -> Stmt
+  | while : BExp -> Stmt -> Stmt
+  | ifthenelse : BExp -> Stmt -> Stmt -> Stmt
+  | ifthen : BExp -> Stmt -> Stmt.
+
+Notation "X :n= A" := (nat_assign X A)(at level 90).
+Notation "X :b= A" := (bool_assign X A)(at level 90).
+Notation "X :s= A" := (string_assign X A)(at level 90).
+Notation "'iNat' X ::= A" := (nat_decl X A)(at level 90).
+Notation "'iBool' X ::= A" := (bool_decl X A)(at level 90).
+Notation "'iStr' X " := (string_decl X) (at level 90).
+Notation "S1 ;; S2" := (sequence S1 S2) (at level 93, right associativity).
+
+Fixpoint eval_fun (s : Stmt) (env : Env) (gas: nat) : Env :=
+    match gas with
+    | 0 => env
+    | S gas' => match s with
+                | sequence S1 S2 => eval_fun S2 (eval_fun S1 env gas') gas'
+                | nat_decl a aexp => update (update env a default) a (res_nat (aeval_fun aexp env))
+                | bool_decl b bexp => update (update env b default) b (res_bool (beval_fun bexp env))
+                | string_decl s => update env s default 
+                | nat_assign a aexp => update env a (res_nat (aeval_fun aexp env))
+                | bool_assign b bexp => update env b (res_bool (beval_fun bexp env))
+                | string_assign s str => update env s (res_string str)
+                | ifthen cond s' => 
+                    match (beval_fun cond env) with
+                    | error_bool => env
+                    | boolean v => match v with
+                                 | true => eval_fun s' env gas'
+                                 | false => env
+                                 end
+                    end
+                | ifthenelse cond S1 S2 => 
+                    match (beval_fun cond env) with
+                        | error_bool => env
+                        | boolean v  => match v with
+                                 | true => eval_fun S1 env gas'
+                                 | false => eval_fun S2 env gas'
+                                 end
+                         end
+                | while cond s' => 
+                    match (beval_fun cond env) with
+                        | error_bool => env
+                        | boolean v => match v with
+                                     | true => eval_fun (s' ;; (while cond s')) env gas'
+                                     | false => env
+                                     end
+                        end
+                end
+    end.
+
+Compute ((eval_fun ( iStr "a" ;; "a" :s=(strcat("test","abc"))) env 100) "a") .
+
+
+
+...
