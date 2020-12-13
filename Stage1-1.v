@@ -80,6 +80,31 @@ Definition check_eq_over_types (t1 : Result) (t2 : Result) : bool :=
   end.
 Compute (check_eq_over_types (res_bool (boolean true)) (res_nat 100)).
 
+
+Definition update (env : Env ) ( x : string ) ( v : Result) : Env :=
+  fun y =>
+   if( eqb y x)
+       then 
+          if ( andb (check_eq_over_types err_undecl (env y)) (negb (check_eq_over_types default v)))
+          then err_undecl 
+          else
+             if( andb (check_eq_over_types err_undecl (env y))  (check_eq_over_types default v))
+             then default
+             else
+                 if (orb (check_eq_over_types default (env y)) (check_eq_over_types v (env y)))
+                 then v 
+                 else err_assign
+   else (env y).
+
+Notation "S [ V /' X ]" := (update S X V) (at level 0).
+
+
+
+Compute (env "y").
+Compute (update (update env "y" (default)) "y" (res_bool true) "y").
+Compute (update env "a" (res_nat 100)) "a".
+
+
 Inductive AExp :=
   | avar: string -> AExp 
   | anum: ErrorNat -> AExp
