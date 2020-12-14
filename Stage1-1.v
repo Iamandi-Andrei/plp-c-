@@ -251,6 +251,7 @@ Inductive Stmt :=
   | nat_decl: string -> AExp -> Stmt 
   | bool_decl: string -> BExp -> Stmt 
   | string_decl : string ->Stmt
+  | vect_decl : string -> nat ->Stmt
   | nat_assign : string -> AExp -> Stmt 
   | bool_assign : string -> BExp -> Stmt 
   | string_assign : string -> string ->Stmt
@@ -265,7 +266,37 @@ Notation "X :s= A" := (string_assign X A)(at level 90).
 Notation "'iNat' X ::= A" := (nat_decl X A)(at level 90).
 Notation "'iBool' X ::= A" := (bool_decl X A)(at level 90).
 Notation "'iStr' X " := (string_decl X) (at level 90).
+Notation "'Vect' X [ n ]" := (vect_decl X n) (at level 90).
 Notation "S1 ;; S2" := (sequence S1 S2) (at level 93, right associativity).
+
+Definition to_char (n: nat) : string :=
+ match n with
+  | 0 =>"0"
+  | 1 =>"1"
+  | 2 =>"2"
+  | 3 =>"3"
+  | 4 =>"4"
+  | 5 =>"5"
+  | 6 =>"6"
+  | _ =>"0"
+
+ end.
+ 
+Fixpoint decl_vect (env : Env) (s : string) (n: nat) : Env :=
+ match n with
+  | 0 => env
+  | S n'=> decl_vect (update env (Concat (Concat (Concat s "[") (to_char n') ) "]") default) s n'
+ end.
+
+Definition vect (env : Env) (s : string) (r: Result) : Env :=
+  update env s r.
+
+
+Compute (decl_vect env "x" 4 ) "x[0]".
+Compute (vect (decl_vect env "x" 4 ) "x[3]" (res_nat 6))"x[3]".
+
+
+
 
 Fixpoint eval_fun (s : Stmt) (env : Env) (gas: nat) : Env :=
     match gas with
@@ -275,6 +306,7 @@ Fixpoint eval_fun (s : Stmt) (env : Env) (gas: nat) : Env :=
                 | nat_decl a aexp => update (update env a default) a (res_nat (aeval_fun aexp env))
                 | bool_decl b bexp => update (update env b default) b (res_bool (beval_fun bexp env))
                 | string_decl s => update env s default 
+                | vect_decl s n => decl_vect env s n
                 | nat_assign a aexp => update env a (res_nat (aeval_fun aexp env))
                 | bool_assign b bexp => update env b (res_bool (beval_fun bexp env))
                 | string_assign s str => update env s (res_string str)
@@ -306,7 +338,3 @@ Fixpoint eval_fun (s : Stmt) (env : Env) (gas: nat) : Env :=
     end.
 
 Compute ((eval_fun ( iStr "a" ;; "a" :s=(strcat("test","abc"))) env 100) "a") .
-
-
-
-...
