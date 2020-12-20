@@ -247,11 +247,12 @@ Fixpoint beval_fun (a : BExp) (envnat : Env) : ErrorBool :=
   | bor b1 b2 => (or_ErrorBool (beval_fun b1 envnat) (beval_fun b2 envnat))
   end.
 
+
 Inductive Stmt :=
   | nat_decl: string -> Stmt 
   | bool_decl: string  -> Stmt 
   | string_decl : string ->Stmt
-  | vect_decl : string -> nat ->Stmt
+  | vect_decl : string -> nat ->nat->Stmt
   | struct_decl : string ->Stmt -> Stmt
   | nat_assign : string -> AExp -> Stmt 
   | bool_assign : string -> BExp -> Stmt 
@@ -261,8 +262,13 @@ Inductive Stmt :=
   | while : BExp -> Stmt -> Stmt
   | ifthenelse : BExp -> Stmt -> Stmt -> Stmt
   | ifthen : BExp -> Stmt -> Stmt
-  | for_each : string -> string -> nat -> Stmt-> Stmt.
+  | for_each : string -> string -> nat -> Stmt-> Stmt
+  | Caz : ErrorNat ->Stmt -> Stmt
+  | switch_case : AExp -> Stmt -> Stmt. 
 
+
+Notation "'Case' (' A ) {' S }" := (Caz A S) (at level 95).
+Notation "'Switch' (' A ) : S " := (switch_case A S) ( at level 93).
 Notation "X :n= A" := (nat_assign X A)(at level 90).
 Notation "X :b= A" := (bool_assign X A)(at level 90).
 Notation "X :s= A" := (string_assign X A)(at level 90).
@@ -270,7 +276,9 @@ Notation "X :v= A" := (var_assign X A) (at level 90).
 Notation "'iNat' X " := (nat_decl X)(at level 90).
 Notation "'iBool' X " := (bool_decl X)(at level 90).
 Notation "'iStr' X " := (string_decl X) (at level 90).
-Notation "'Vect' X [' n ] " := (vect_decl X n) (at level 90).
+Notation "'nVect' X [' n ] " := (vect_decl X n 1) (at level 90).
+Notation "'bVect' X [' n ] " := (vect_decl X n 2) (at level 90).
+Notation "'sVect' X [' n ] " := (vect_decl X n 3) (at level 90).
 Notation "'Struct' X {' S }" := (struct_decl X S) (at level 90).
 Notation "S1 ;; S2" := (sequence S1 S2) (at level 93, right associativity).
 Notation "'Cat_timp' (' B ) {' S }" := (while B S) (at level 93).
@@ -294,14 +302,16 @@ Definition to_char (n: nat) : string :=
 
  end.
  
-Fixpoint decl_vect (env : Env) (s : string) (n: nat) : Env :=
- match n with
-  | 0 => env
-  | S n'=> decl_vect (update env (Concat (Concat (Concat s "[") (to_char n') ) "]") default) s n'
- end.
+Definition vect_concat (s1 :string) (n:nat) : string :=
+ Concat (Concat (Concat s1 "[") (to_char n)) "]".
 
-Definition vect (env : Env) (s : string) (r: Result) : Env :=
-  update env s r.
+Definition res_check (n: nat) : Result :=
+match n with
+ | 1 => res_nat 0 
+ | 2 => res_bool true
+ | 3 => res_string "" 
+ | _ => default
+end.
 
 Definition decl_check (s: Stmt) : nat :=
 match s with
@@ -311,10 +321,20 @@ match s with
  | _ => 0
 end.
 
+Fixpoint decl_vect (env : Env) (s : string) (n tip: nat) : Env :=
+ match n with
+  | 0 => env
+  | S n'=> decl_vect (update (update env (vect_concat s n') default) (vect_concat s n') (res_check tip) ) s n' tip
+ end.
+
+Definition vect (env : Env) (s : string) (r: Result) : Env :=
+  update env s r.
+
+
+
 Definition struct_concat (s1 s2 :string) : string :=
  Concat (Concat s1 ".") s2.
-Definition vect_concat (s1 :string) (n:nat) : string :=
- Concat (Concat (Concat s1 "[") (to_char n)) "]".
+
 Compute struct_concat "a" "m".
 Compute vect_concat "x" 5.
 
@@ -340,8 +360,8 @@ end.
 Compute (decl_struct env "x" ( iNat "a" ;; iNat "b")) "x.b".
 Compute (decl_struct env "x" ( iNat "a" ;; iBool "b";; iStr "c")) "x.c".
 
-Compute (decl_vect env "x" 4 ) "x[0]".
-Compute (vect (decl_vect env "x" 4 ) "x[3]" (res_nat 6))"x[3]".
+Compute (decl_vect env "x" 4 3 ) "x[0]".
+Compute (vect (decl_vect env "x" 4 1) "x[3]" (res_nat 6))"x[3]".
 
 
 
@@ -354,7 +374,7 @@ Fixpoint eval_fun (s : Stmt) (env : Env) (gas: nat) : Env :=
                 | nat_decl a => update (update env a default) a (res_nat 0)
                 | bool_decl b => update (update env b default) b (res_bool true)
                 | string_decl s => update env s default 
-                | vect_decl s n => decl_vect env s n
+                | vect_decl s n m=> decl_vect env s n m
                 | struct_decl s n => decl_struct env s n
                 | nat_assign a aexp => update env a (res_nat (aeval_fun aexp env))
                 | bool_assign b bexp => update env b (res_bool (beval_fun bexp env))
@@ -386,18 +406,36 @@ Fixpoint eval_fun (s : Stmt) (env : Env) (gas: nat) : Env :=
                                      | false => env
                                      end
                         end
+                | Caz n St =>eval_fun St env gas'
+               
+                | switch_case AE C =>
+                                 match C with
+                                         | Caz n St => if(ErrorNat_beq n (aeval_fun AE env))  
+                                                       then eval_fun St env gas'
+                                                        else env
+                                          | sequence S1 S2 => match S1 with    
+                                                              | Caz n St => if(ErrorNat_beq n (aeval_fun AE env))  
+                                                                            then eval_fun St env gas'   
+                                                                            else eval_fun (switch_case AE S2) env gas'
+                                                               | _ => env
+                                                                end
+                                         | _ => env
+                                 end
                 | for_each V it n St=>
                                   match n with
                                       | 0 => eval_fun St (update env it (env (vect_concat V 0))) gas'
                                       | S n' => eval_fun (St ;; for_each V it n' St) (update env it (env (vect_concat V n))) gas'
                                   end
+                
                 end
     end.
+
+
 
 Compute ((eval_fun ( iBool "b" ;; "b" :b=btrue)) env 100 "b") .
 
 Compute ((eval_fun ( iStr "a" ;; "a" :s=(strcat("test","abc"))) env 100) "a") .
-Compute (eval_fun ( Vect "x" [' 5 ];; "x[3]" :n= 10 ) env 100) "x[3]".
+Compute (eval_fun ( nVect "x" [' 5 ];; "x[3]" :n= 10 ) env 100) "x[3]".
 Compute (eval_fun ( Struct "X" {' iNat "a" ;; iBool "b";; iStr "c" } ;; "X.a" :n= 10 ) env 100) "X.a".
 
 Definition Test1:=
@@ -414,7 +452,7 @@ Definition xD :=
 Compute (eval_fun xD env 100) "c".
 
 Definition Test :=
-Vect "x" [' 5 ] ;;
+nVect "x" [' 5 ] ;;
  "x[2]" :n=2;;
  "x[3]" :n=10 ;;
  "x[1]" :n=5 ;;
@@ -426,3 +464,14 @@ Vect "x" [' 5 ] ;;
 
 
 Compute (eval_fun Test env 100) "sum".
+
+Definition Checkq :=
+iNat "a" ;;
+iNat "b" ;;
+"a" :n= 3 +' 4 ;;
+Switch ('"a" -' 5 ) : 
+Case ('2) {' "b" :n= 2};;
+Case ('7) {' "b" :n= 7};;
+Case ('15) {' "b" :n= 15}.
+
+Compute (eval_fun Checkq env 100) "b". 
