@@ -11,8 +11,8 @@ Fixpoint Concat (s1 s2 : string) : string :=
   | String c s1' => String c (Concat s1' s2)
   end.
 
-Notation "strcat( x , y )" := (Concat x y) (at level 60).
-Compute strcat( "abc" , "bcd").
+
+Compute Concat "abc"  "bcd".
 
 Fixpoint Strl (s1 : string) : nat :=
  match s1 with
@@ -20,12 +20,10 @@ Fixpoint Strl (s1 : string) : nat :=
  | String c s1' => S (Strl s1')
 end.
 
-Notation "strlen( x )" := (Strl x) (at level 62).
-Compute strlen( "a2414xd" ).
 
-Notation "strcmp( x , y )" := (eqb x y) (at level 64).
+Compute Strl "a2414xd" .
 
-Compute strcmp( "ab" , "abc" ).
+Compute eqb "ab"  "abc" .
 
 Inductive ErrorNat :=
   | error_nat : ErrorNat
@@ -42,7 +40,8 @@ Inductive Result :=
   | default : Result
   | res_nat : ErrorNat -> Result
   | res_bool : ErrorBool -> Result
-  | res_string : string -> Result.
+  | res_string : string -> Result
+  | err_str : Result.
   
 Scheme Equality for Result.
 
@@ -77,6 +76,10 @@ Definition check_eq_over_types (t1 : Result) (t2 : Result) : bool :=
                      | res_string b => true
                      | _ => false
                       end
+   |err_str => match t2 with
+                | err_str => true
+                | _ => false
+                end
   end.
 Compute (check_eq_over_types (res_bool (boolean true)) (res_nat 100)).
 
@@ -112,13 +115,15 @@ Inductive AExp :=
   | amin: AExp -> AExp -> AExp
   | amul: AExp -> AExp -> AExp 
   | adiv: AExp -> AExp -> AExp 
-  | amod: AExp -> AExp -> AExp.
+  | amod: AExp -> AExp -> AExp
+  | alength: string -> AExp.
 
 Notation "A +' B" := (aplus A B)(at level 50, left associativity).
 Notation "A -' B" := (amin A B)(at level 50, left associativity).
 Notation "A *' B" := (amul A B)(at level 48, left associativity).
 Notation "A /' B" := (adiv A B)(at level 48, left associativity).
 Notation "A %' B" := (amod A B)(at level 45, left associativity).
+Notation "'STRLen' (' A )" := (alength A) (at level 50).
 
 Definition plus_ErrorNat (n1 n2 : ErrorNat) : ErrorNat :=
   match n1, n2 with
@@ -159,6 +164,13 @@ Definition mod_ErrorNat (n1 n2 : ErrorNat) : ErrorNat :=
     | num v1, num v2 => num (v1 - v2 * (Nat.div v1 v2))
     end.
 
+Definition length_ErrorNat (r:Result) : ErrorNat :=
+match r with
+ | res_string s => Strl s
+ | _ =>0
+end.
+
+
 Fixpoint aeval_fun (a : AExp) (env : Env) : ErrorNat :=
   match a with
   | avar v => match (env v) with
@@ -171,12 +183,15 @@ Fixpoint aeval_fun (a : AExp) (env : Env) : ErrorNat :=
   | amin a1 a2 => (sub_ErrorNat (aeval_fun a1 env) (aeval_fun a2 env))
   | adiv a1 a2 => (div_ErrorNat  (aeval_fun a1 env) (aeval_fun a2 env))
   | amod a1 a2 => (mod_ErrorNat (aeval_fun a1 env) (aeval_fun a2 env))
+  | alength S1 => length_ErrorNat (env S1)
   end.
 
 Coercion anum: ErrorNat >-> AExp.
 Coercion avar: string >-> AExp.
 
 Compute aeval_fun ("x" +' 3) (update (update env "x" (default)) "x" (res_nat 100) ).
+Compute aeval_fun (STRLen ('"x" )) (update (update env "x" (default)) "x" (res_string "test") ).
+Compute aeval_fun ( STRLen ('"abcd" ) +' 5 ) env.
 
 
 
@@ -189,13 +204,15 @@ Inductive BExp :=
   | bgt : AExp -> AExp -> BExp
   | bnot : BExp -> BExp
   | band : BExp -> BExp -> BExp
-  | bor : BExp -> BExp -> BExp.
+  | bor : BExp -> BExp -> BExp
+  | bstr : string -> string -> BExp.
 
 Notation "A <' B" := (blt A B) (at level 70).
 Notation "A >' B" := (bgt A B) (at level 70).
 Notation "!' A" := (bnot A)(at level 51, left associativity).
 Notation "A &&' B" := (band A B)(at level 52, left associativity).
 Notation "A ||' B" := (bor A B)(at level 53, left associativity).
+Notation "'STRCmp' (' A , B )" := (bstr A B) (at level 50).
 
 Definition lt_ErrorBool (n1 n2 : ErrorNat) : ErrorBool :=
   match n1, n2 with
@@ -231,6 +248,13 @@ Definition or_ErrorBool (n1 n2 : ErrorBool) : ErrorBool :=
     | boolean v1, boolean v2 => boolean (orb v1 v2)
     end.
 
+Definition res_ErrorBool (r1 r2 : Result) : ErrorBool :=
+match r1,r2 with
+| res_string s1, res_string s2 => eqb s1 s2
+| _,_ => false
+end.
+ 
+Compute res_ErrorBool (res_string "test") (res_string "tet").
 Fixpoint beval_fun (a : BExp) (envnat : Env) : ErrorBool :=
   match a with
   | btrue => true
@@ -245,7 +269,10 @@ Fixpoint beval_fun (a : BExp) (envnat : Env) : ErrorBool :=
   | bnot b1 => (not_ErrorBool (beval_fun b1 envnat))
   | band b1 b2 => (and_ErrorBool (beval_fun b1 envnat) (beval_fun b2 envnat))
   | bor b1 b2 => (or_ErrorBool (beval_fun b1 envnat) (beval_fun b2 envnat))
+  | bstr s1 s2=> res_ErrorBool (envnat s1) (envnat s2)
   end.
+
+Compute beval_fun (STRCmp ('"A", "B" )) (update (update (update (update env "A" (default)) "A" (res_string "tet")) "B" (default)) "B" (res_string "test")).
 
 
 Inductive Stmt :=
@@ -264,7 +291,9 @@ Inductive Stmt :=
   | ifthen : BExp -> Stmt -> Stmt
   | for_each : string -> string -> nat -> Stmt-> Stmt
   | Caz : ErrorNat ->Stmt -> Stmt
-  | switch_case : AExp -> Stmt -> Stmt. 
+  | switch_case : AExp -> Stmt -> Stmt
+  | Copy_str : string -> string -> Stmt
+  | Concat_str : string -> string -> Stmt.
 
 
 Notation "'Case' (' A ) {' S }" := (Caz A S) (at level 95).
@@ -285,6 +314,8 @@ Notation "'Cat_timp' (' B ) {' S }" := (while B S) (at level 93).
 Notation "'Daca' (' B ) 'atunci' {' S } 'altfel' {' S2 }" := (ifthenelse B S S2) (at level 93).
 Notation "'Daca' (' B ) 'atunci' {' S }" := (ifthen B S)( at level 93).
 Notation "'Pentru_fiecare'  (' V , it , n )  {' S }" := (for_each V it n S) (at level 94).
+Notation "'Strcpy' (' S1 , S2 )":= (Copy_str S1 S2) (at level 93).
+Notation "'Strcat' (' S1 , S2 )":= (Concat_str S1 S2) (at level 93).
 
 Definition to_char (n: nat) : string :=
  match n with
@@ -357,12 +388,17 @@ match a with
  | _ => env
 end.
 
+Definition Concat_res (r1 r2 :Result) :Result :=
+match r1,r2 with
+| res_string s1, res_string s2 => res_string (Concat s1 s2)
+| _,_ => err_str
+end.
+
 Compute (decl_struct env "x" ( iNat "a" ;; iNat "b")) "x.b".
 Compute (decl_struct env "x" ( iNat "a" ;; iBool "b";; iStr "c")) "x.c".
 
 Compute (decl_vect env "x" 4 3 ) "x[0]".
 Compute (vect (decl_vect env "x" 4 1) "x[3]" (res_nat 6))"x[3]".
-
 
 
 
@@ -425,18 +461,24 @@ Fixpoint eval_fun (s : Stmt) (env : Env) (gas: nat) : Env :=
                                   match n with
                                       | 0 => eval_fun St (update env it (env (vect_concat V 0))) gas'
                                       | S n' => eval_fun (St ;; for_each V it n' St) (update env it (env (vect_concat V n))) gas'
-                                  end
-                
+                                      end
+                 | Copy_str S1 S2 => update env S1 (env S2) 
+                 | Concat_str S1 S2 => update env S1 (Concat_res (env S1) (env S2))               
                 end
     end.
 
 
 
 Compute ((eval_fun ( iBool "b" ;; "b" :b=btrue)) env 100 "b") .
+Compute (eval_fun ( iStr "c" ;; "c" :s="test" ;; iNat "nr" ;; "nr" :n= (STRLen ('"c" ) )) env 100) "nr".
 
-Compute ((eval_fun ( iStr "a" ;; "a" :s=(strcat("test","abc"))) env 100) "a") .
+Compute ((eval_fun ( iStr "a" ;; "a" :s=(Concat "test" "abc")) env 100) "a") .
 Compute (eval_fun ( nVect "x" [' 5 ];; "x[3]" :n= 10 ) env 100) "x[3]".
 Compute (eval_fun ( Struct "X" {' iNat "a" ;; iBool "b";; iStr "c" } ;; "X.a" :n= 10 ) env 100) "X.a".
+
+Compute (eval_fun ( iStr "A" ;; iStr "B" ;; "B" :s= "rest" ;; Strcpy (' "A" , "B" ) ) env 100) "A".
+Compute (eval_fun ( iStr "A" ;; iStr "B" ;; "B" :s= "rest" ;; Strcpy (' "A" , "B" );; Strcat (' "A" , "B" ) ) env 100) "A".
+
 
 Definition Test1:=
  iNat "a";;
