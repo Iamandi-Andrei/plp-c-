@@ -194,6 +194,74 @@ Compute aeval_fun (STRLen ('"x" )) (update (update env "x" (default)) "x" (res_s
 Compute aeval_fun ( STRLen ('"abcd" ) +' 5 ) env.
 
 
+Reserved Notation "A =[ S ]=> N" (at level 60).
+Inductive aeval : AExp -> Env -> ErrorNat -> Prop :=
+| const : forall n sigma, anum n =[ sigma ]=> n
+| var : forall v sigma, avar v =[ sigma ]=> match (sigma v) with
+                                               | res_nat v =>v
+                                               | _ =>error_nat
+                                             end
+| add : forall a1 a2 i1 i2 sigma n,
+    a1 =[ sigma ]=> i1 ->
+    a2 =[ sigma ]=> i2 ->
+    n = (plus_ErrorNat i1  i2) ->
+    a1 +' a2 =[sigma]=> n
+| times : forall a1 a2 i1 i2 sigma n,
+    a1 =[ sigma ]=> i1 ->
+    a2 =[ sigma ]=> i2 ->
+    n = (mul_ErrorNat i1  i2) ->
+    a1 *' a2 =[sigma]=> n
+| diff : forall a1 a2 i1 i2 sigma n,
+    a1 =[ sigma ]=> i1 ->
+    a2 =[ sigma ]=> i2 ->
+    n = (sub_ErrorNat i1  i2) ->
+    a1 -' a2 =[sigma]=> n
+| div : forall a1 a2 i1 i2 sigma n,
+    a1 =[ sigma ]=> i1 ->
+    a2 =[ sigma ]=> i2 ->
+    n = (div_ErrorNat i1  i2) ->
+    a1 /' a2 =[sigma]=> n
+| modlo : forall a1 a2 i1 i2 sigma n,
+    a1 =[ sigma ]=> i1 ->
+    a2 =[ sigma ]=> i2 ->
+    n = (mod_ErrorNat i1 i2) ->
+    a1 %' a2 =[sigma]=> n
+where "a =[ sigma ]=> n" := (aeval a sigma n).
+
+Require Import Omega.
+Example ex1 : 5 %' 3 =[ env ]=> 2.
+Proof.
+eapply modlo.
+ -apply const.
+ -apply const.
+ -simpl.
+ reflexivity.
+Qed.
+Example ex2 : 7 /' 3 =[ env ]=> 2.
+Proof.
+  eapply div.
+  - apply const.
+  - apply const.
+  -simpl.
+   reflexivity.
+Qed.
+Example ex3 : 5 -' 7 =[ env ]=> error_nat.
+Proof.
+ eapply diff.
+ -apply const.
+ -apply const.
+ -simpl.
+ reflexivity.
+Qed.
+Example ex4 : "n" +' 2 =[ env ]=> error_nat.
+Proof.
+ eapply add.
+ -apply var.
+ -apply const.
+ -simpl.
+ reflexivity.
+Qed.
+
 
 Inductive BExp :=
   | berror
@@ -274,6 +342,67 @@ Fixpoint beval_fun (a : BExp) (envnat : Env) : ErrorBool :=
 
 Compute beval_fun (STRCmp ('"A", "B" )) (update (update (update (update env "A" (default)) "A" (res_string "tet")) "B" (default)) "B" (res_string "test")).
 
+Reserved Notation "B ={ S }=> B'" (at level 70).
+Inductive beval : BExp -> Env -> ErrorBool -> Prop :=
+| e_true : forall sigma, btrue ={ sigma }=>  true
+| e_false : forall sigma, bfalse ={ sigma }=> false
+| e_var : forall v sigma, bvar v ={ sigma }=>  match (sigma v) with
+                                                | res_bool x => x
+                                                | _ => error_bool
+                                                end
+| e_lessthan : forall a1 a2 i1 i2 sigma b,
+    a1 =[ sigma ]=> i1 ->
+    a2 =[ sigma ]=> i2 ->
+    b = (lt_ErrorBool i1 i2) ->
+    a1 <' a2 ={ sigma }=> b
+| e_greatthan : forall a1 a2 i1 i2 sigma b,
+    a1 =[ sigma ]=> i1 ->
+    a2 =[ sigma ]=> i2 ->
+    b = (gt_ErrorBool i1 i2) ->
+    a1 >' a2 ={ sigma }=> b
+| e_not : forall b1 i1 sigma b,
+    b1 ={ sigma }=> i1 ->
+    b = ( not_ErrorBool i1 ) ->
+    (bnot b1) ={ sigma }=> b
+| e_and : forall b1 b2 i1 i2 sigma b,
+    b1 ={ sigma }=> i1 ->
+    b2 ={ sigma }=> i2 ->
+    b = ( and_ErrorBool i1 i2 ) ->
+    (band b1 b2) ={ sigma }=> b
+| e_or : forall b1 b2 i1 i2 sigma b,
+    b1 ={ sigma }=> i1 ->
+    b2 ={ sigma }=> i2 ->
+    b = ( or_ErrorBool i1 i2 ) ->
+    (bor b1 b2) ={ sigma }=> b
+where "B ={ S }=> B'" := (beval B S B').
+
+Example bex1 : 5 <' 9 ={ env }=> true.
+Proof.
+  eapply e_lessthan.
+  - eapply const.
+  - eapply const.
+  - simpl. reflexivity.
+Qed.
+
+Example bex2 : "n" <' 10 ={ env }=> error_bool.
+Proof.
+ eapply e_lessthan.
+ -apply var.
+ -apply const.
+ -simpl. reflexivity.
+Qed.
+
+Example bex3 : !' (5 >'7) ={ env }=> true.
+Proof.
+ eapply e_not.
+ -eapply e_greatthan.
+  apply const.
+  apply const.
+ simpl.
+ reflexivity.
+ -simpl.
+ reflexivity.
+Qed.
 
 Inductive Stmt :=
   | nat_decl: string -> Stmt 
@@ -297,7 +426,7 @@ Inductive Stmt :=
 
 
 Notation "'Case' (' A ) {' S }" := (Caz A S) (at level 95).
-Notation "'Switch' (' A ) : S " := (switch_case A S) ( at level 93).
+Notation "'Switch' (' A ) : {' S } " := (switch_case A S) ( at level 93).
 Notation "X :n= A" := (nat_assign X A)(at level 90).
 Notation "X :b= A" := (bool_assign X A)(at level 90).
 Notation "X :s= A" := (string_assign X A)(at level 90).
@@ -468,13 +597,48 @@ Fixpoint eval_fun (s : Stmt) (env : Env) (gas: nat) : Env :=
     end.
 
 
+Reserved Notation "S -{ Sigma }-> Sigma'" (at level 60).
+Check update.
+Inductive eval : Stmt -> Env -> Env -> Prop :=
+| e_assigN: forall a i x sigma sigma',
+    a =[ sigma ]=> i ->
+    sigma' = (update sigma x (res_nat i)) ->
+    (x :n= a) -{ sigma }-> sigma'
+| e_assigB: forall a i x sigma sigma',
+    a ={ sigma }=> i ->
+    sigma' = (update sigma x (res_bool i)) ->
+    (x :b= a) -{ sigma }-> sigma'
+| e_assigS: forall a x sigma sigma',
+    sigma' = (update sigma x (res_string a)) ->
+    (x :s= a) -{ sigma }-> sigma'
+| e_seq : forall s1 s2 sigma sigma1 sigma2,
+    s1 -{ sigma }-> sigma1 ->
+    s2 -{ sigma1 }-> sigma2 ->
+    (s1 ;; s2) -{ sigma }-> sigma2
+| e_whilefalse : forall b s sigma,
+    b ={ sigma }=> false ->
+    while b s -{ sigma }-> sigma
+| e_whiletrue : forall b s sigma sigma',
+    b ={ sigma }=> true ->
+    (s ;; while b s) -{ sigma }-> sigma' ->
+    while b s -{ sigma }-> sigma'
+| e_iffalse : forall b s s' sigma sigma',
+  b ={ sigma }=> false ->
+  s' -{ sigma }->sigma' ->
+  ifthenelse b s s' -{ sigma }->sigma'
+| e_iftrue : forall b s s' sigma sigma',
+  b ={ sigma }=> true ->
+  s -{ sigma }->sigma' ->
+  ifthenelse b s s' -{ sigma }->sigma' 
+  
+where "s -{ sigma }-> sigma'" := (eval s sigma sigma').
 
 Compute ((eval_fun ( iBool "b" ;; "b" :b=btrue)) env 100 "b") .
 Compute (eval_fun ( iStr "c" ;; "c" :s="test" ;; iNat "nr" ;; "nr" :n= (STRLen ('"c" ) )) env 100) "nr".
 
 Compute ((eval_fun ( iStr "a" ;; "a" :s=(Concat "test" "abc")) env 100) "a") .
-Compute (eval_fun ( nVect "x" [' 5 ];; "x[3]" :n= 10 ) env 100) "x[3]".
-Compute (eval_fun ( Struct "X" {' iNat "a" ;; iBool "b";; iStr "c" } ;; "X.a" :n= 10 ) env 100) "X.a".
+Compute (eval_fun ( nVect "x" [' 5 ];; "x[3]" :n= 10 ) env 100) "x[4]".
+Compute (eval_fun ( Struct "X" {' iNat "a" ;; iBool "b";; iStr "c" } ;; "X.a" :n= 10 ) env 100) "X.c".
 
 Compute (eval_fun ( iStr "A" ;; iStr "B" ;; "B" :s= "rest" ;; Strcpy (' "A" , "B" ) ) env 100) "A".
 Compute (eval_fun ( iStr "A" ;; iStr "B" ;; "B" :s= "rest" ;; Strcpy (' "A" , "B" );; Strcat (' "A" , "B" ) ) env 100) "A".
@@ -502,7 +666,7 @@ nVect "x" [' 5 ] ;;
  iNat "it" ;;
  iNat "sum" ;;
  "sum" :n=0 ;;
- Pentru_fiecare ('"x" , "it" , 3 )  {' "sum" :n= "sum" +' "it" }.
+ Pentru_fiecare ('"x" , "it" , 2 )  {' "sum" :n= "sum" +' "it" }.
 
 
 Compute (eval_fun Test env 100) "sum".
@@ -511,9 +675,16 @@ Definition Checkq :=
 iNat "a" ;;
 iNat "b" ;;
 "a" :n= 3 +' 4 ;;
-Switch ('"a" -' 5 ) : 
+Switch ('"a" ) : {'
 Case ('2) {' "b" :n= 2};;
 Case ('7) {' "b" :n= 7};;
-Case ('15) {' "b" :n= 15}.
+Case ('15) {' "b" :n= 15}
+}.
 
 Compute (eval_fun Checkq env 100) "b". 
+
+
+
+
+
+
