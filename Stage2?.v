@@ -99,7 +99,7 @@ Definition update (env : Env ) ( x : string ) ( v : Result) : Env :=
                  else err_assign
    else (env y).
 
-Notation "S [ V /' X ]" := (update S X V) (at level 0).
+Notation "S [ V /' X ]" := (update S X V) (at level 15).
 
 
 
@@ -118,12 +118,13 @@ Inductive AExp :=
   | amod: AExp -> AExp -> AExp
   | alength: string -> AExp.
 
+
 Notation "A +' B" := (aplus A B)(at level 50, left associativity).
 Notation "A -' B" := (amin A B)(at level 50, left associativity).
 Notation "A *' B" := (amul A B)(at level 48, left associativity).
 Notation "A /' B" := (adiv A B)(at level 48, left associativity).
-Notation "A %' B" := (amod A B)(at level 45, left associativity).
-Notation "'STRLen' (' A )" := (alength A) (at level 50).
+Notation "A %' B" := (amod A B)(at level 48, left associativity).
+Notation "'STRLen' (' A )" := (alength A) (at level 52).
 
 Definition plus_ErrorNat (n1 n2 : ErrorNat) : ErrorNat :=
   match n1, n2 with
@@ -189,9 +190,117 @@ Fixpoint aeval_fun (a : AExp) (env : Env) : ErrorNat :=
 Coercion anum: ErrorNat >-> AExp.
 Coercion avar: string >-> AExp.
 
+
 Compute aeval_fun ("x" +' 3) (update (update env "x" (default)) "x" (res_nat 100) ).
 Compute aeval_fun (STRLen ('"x" )) (update (update env "x" (default)) "x" (res_string "test") ).
 Compute aeval_fun ( STRLen ('"abcd" ) +' 5 ) env.
+
+Inductive A_Instruction :=
+| push_const : Result -> A_Instruction
+| push_var : string -> A_Instruction
+| add : A_Instruction
+| sub : A_Instruction
+| mul : A_Instruction
+| div : A_Instruction
+| mod : A_Instruction.
+
+Require Import List.
+Open Scope list_scope.
+
+
+Module ListNotations.
+Notation "[ ]" := nil (format "[ ]") : list_scope.
+Notation "[ x ]" := (cons x nil) : list_scope.
+Notation "[ x ; y ; .. ; z ]" := (cons x (cons y .. (cons z nil) ..)) : list_scope.
+End ListNotations.
+
+Import ListNotations.
+
+
+
+Definition Stack := list Result.
+
+Definition run_A (inn: A_Instruction) (env: Env) (stack: Stack) : Stack :=
+ match inn with
+ | push_const c => (c::stack)
+ | push_var v => ((env v)::stack)
+ | add => match stack with
+          | n1 :: n2 :: stack' => match n1,n2,stack' with
+                                   | res_nat a1, res_nat a2,stack'' => ( res_nat (plus_ErrorNat a1 a2) )::stack''
+                                   | _,_,_ => stack'
+                                   end
+          | _ => stack
+           end
+ | sub => match stack with
+          | n1 :: n2 :: stack' => match n1,n2,stack' with
+                                   | res_nat a1, res_nat a2,stack'' => ( res_nat (sub_ErrorNat a1 a2) )::stack''
+                                   | _,_,_ => stack'
+                                   end
+          | _ => stack
+           end
+ | mul => match stack with
+          | n1 :: n2 :: stack' => match n1,n2,stack' with
+                                   | res_nat a1, res_nat a2,stack'' => ( res_nat (mul_ErrorNat a1 a2) )::stack''
+                                   | _,_,_ => stack'
+                                   end
+          | _ => stack
+           end
+ | div => match stack with
+          | n1 :: n2 :: stack' => match n1,n2,stack' with
+                                   | res_nat a1, res_nat a2,stack'' => ( res_nat (div_ErrorNat a1 a2) )::stack''
+                                   | _,_,_ => stack'
+                                   end
+          | _ => stack
+           end
+ | mod => match stack with
+          | n1 :: n2 :: stack' => match n1,n2,stack' with
+                                   | res_nat a1, res_nat a2,stack'' => ( res_nat (mod_ErrorNat a1 a2) )::stack''
+                                   | _,_,_ => stack'
+                                   end
+          | _ => stack
+           end
+end.
+
+
+Compute (run_A (push_const (res_nat 10)) env [] ).
+Compute (run_A (push_var "x") (update (update env "x" default) "x" (res_nat 5)) nil ).
+Check [(res_nat 10);(res_nat 12)].
+Definition test: Stack:= (run_A (push_const(res_nat 12)) env (run_A (push_const (res_nat 10)) env nil)).
+Compute (run_A mul env test ).
+
+Fixpoint run_As (inn: list A_Instruction) (env: Env) (stack: Stack) : Stack :=
+ match inn with
+ | [] => stack
+ | i:: inn' => run_As inn' env (run_A i env stack)
+ end.
+
+Definition pgm1 :=
+            [ push_const (res_nat 15);
+              push_var "x";
+              push_const (res_nat 7);
+              push_const (res_nat 2);
+              add
+              ].
+
+Compute run_As pgm1 (update (update env "x" default) "x" (res_nat 5)) nil.
+
+Fixpoint compile (a: AExp) : list A_Instruction :=
+ match a with
+ | anum n => [push_const (res_nat n)]
+ | avar v => [push_var v]
+ | aplus a1 a2 => (compile a1) ++ (compile a2) ++ [add]
+ | amin a1 a2 =>(compile a1) ++ (compile a2) ++ [sub]
+ | amul a1 a2 => (compile a1) ++ (compile a2) ++ [mul]
+ | adiv a1 a2 => (compile a1) ++ (compile a2) ++ [div]
+ | amod a1 a2 => (compile a1) ++ (compile a2) ++ [mod]
+ | _ => []
+end.
+
+
+Compute compile (2 +' 5).
+Compute run_As (compile (2 +' 5)) env [] .
+
+
 
 
 Reserved Notation "A =[ S ]=> N" (at level 60).
@@ -201,7 +310,7 @@ Inductive aeval : AExp -> Env -> ErrorNat -> Prop :=
                                                | res_nat v =>v
                                                | _ =>error_nat
                                              end
-| add : forall a1 a2 i1 i2 sigma n,
+| add2 : forall a1 a2 i1 i2 sigma n,
     a1 =[ sigma ]=> i1 ->
     a2 =[ sigma ]=> i2 ->
     n = (plus_ErrorNat i1  i2) ->
@@ -216,7 +325,7 @@ Inductive aeval : AExp -> Env -> ErrorNat -> Prop :=
     a2 =[ sigma ]=> i2 ->
     n = (sub_ErrorNat i1  i2) ->
     a1 -' a2 =[sigma]=> n
-| div : forall a1 a2 i1 i2 sigma n,
+| div2 : forall a1 a2 i1 i2 sigma n,
     a1 =[ sigma ]=> i1 ->
     a2 =[ sigma ]=> i2 ->
     n = (div_ErrorNat i1  i2) ->
@@ -239,7 +348,7 @@ eapply modlo.
 Qed.
 Example ex2 : 7 /' 3 =[ env ]=> 2.
 Proof.
-  eapply div.
+  eapply div2.
   - apply const.
   - apply const.
   -simpl.
@@ -255,7 +364,7 @@ Proof.
 Qed.
 Example ex4 : "n" +' 2 =[ env ]=> error_nat.
 Proof.
- eapply add.
+ eapply add2.
  -apply var.
  -apply const.
  -simpl.
@@ -278,7 +387,7 @@ Inductive BExp :=
 Notation "A <' B" := (blt A B) (at level 70).
 Notation "A >' B" := (bgt A B) (at level 70).
 Notation "!' A" := (bnot A)(at level 51, left associativity).
-Notation "A &&' B" := (band A B)(at level 52, left associativity).
+Notation "A &&' B" := (band A B)(at level 53, left associativity).
 Notation "A ||' B" := (bor A B)(at level 53, left associativity).
 Notation "'STRCmp' (' A , B )" := (bstr A B) (at level 50).
 
@@ -596,7 +705,6 @@ Fixpoint eval_fun (s : Stmt) (env : Env) (gas: nat) : Env :=
                 end
     end.
 
-
 Reserved Notation "S -{ Sigma }-> Sigma'" (at level 60).
 Check update.
 Inductive eval : Stmt -> Env -> Env -> Prop :=
@@ -682,6 +790,14 @@ Case ('15) {' "b" :n= 15}
 }.
 
 Compute (eval_fun Checkq env 100) "b". 
+
+
+
+
+
+
+
+
 
 
 
