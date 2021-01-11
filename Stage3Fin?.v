@@ -195,112 +195,6 @@ Compute aeval_fun ("x" +' 3) (update (update env "x" (default)) "x" (res_nat 100
 Compute aeval_fun (STRLen ('"x" )) (update (update env "x" (default)) "x" (res_string "test") ).
 Compute aeval_fun ( STRLen ('"abcd" ) +' 5 ) env.
 
-Inductive A_Instruction :=
-| push_const : Result -> A_Instruction
-| push_var : string -> A_Instruction
-| add : A_Instruction
-| sub : A_Instruction
-| mul : A_Instruction
-| div : A_Instruction
-| mod : A_Instruction.
-
-Require Import List.
-Open Scope list_scope.
-
-
-Module ListNotations.
-Notation "[ ]" := nil (format "[ ]") : list_scope.
-Notation "[ x ]" := (cons x nil) : list_scope.
-Notation "[ x ; y ; .. ; z ]" := (cons x (cons y .. (cons z nil) ..)) : list_scope.
-End ListNotations.
-
-Import ListNotations.
-
-
-
-Definition Stack := list Result.
-
-Definition run_A (inn: A_Instruction) (env: Env) (stack: Stack) : Stack :=
- match inn with
- | push_const c => (c::stack)
- | push_var v => ((env v)::stack)
- | add => match stack with
-          | n1 :: n2 :: stack' => match n1,n2,stack' with
-                                   | res_nat a1, res_nat a2,stack'' => ( res_nat (plus_ErrorNat a1 a2) )::stack''
-                                   | _,_,_ => stack'
-                                   end
-          | _ => stack
-           end
- | sub => match stack with
-          | n1 :: n2 :: stack' => match n1,n2,stack' with
-                                   | res_nat a1, res_nat a2,stack'' => ( res_nat (sub_ErrorNat a1 a2) )::stack''
-                                   | _,_,_ => stack'
-                                   end
-          | _ => stack
-           end
- | mul => match stack with
-          | n1 :: n2 :: stack' => match n1,n2,stack' with
-                                   | res_nat a1, res_nat a2,stack'' => ( res_nat (mul_ErrorNat a1 a2) )::stack''
-                                   | _,_,_ => stack'
-                                   end
-          | _ => stack
-           end
- | div => match stack with
-          | n1 :: n2 :: stack' => match n1,n2,stack' with
-                                   | res_nat a1, res_nat a2,stack'' => ( res_nat (div_ErrorNat a1 a2) )::stack''
-                                   | _,_,_ => stack'
-                                   end
-          | _ => stack
-           end
- | mod => match stack with
-          | n1 :: n2 :: stack' => match n1,n2,stack' with
-                                   | res_nat a1, res_nat a2,stack'' => ( res_nat (mod_ErrorNat a1 a2) )::stack''
-                                   | _,_,_ => stack'
-                                   end
-          | _ => stack
-           end
-end.
-
-
-Compute (run_A (push_const (res_nat 10)) env [] ).
-Compute (run_A (push_var "x") (update (update env "x" default) "x" (res_nat 5)) nil ).
-Check [(res_nat 10);(res_nat 12)].
-Definition test: Stack:= (run_A (push_const(res_nat 12)) env (run_A (push_const (res_nat 10)) env nil)).
-Compute (run_A mul env test ).
-
-Fixpoint run_As (inn: list A_Instruction) (env: Env) (stack: Stack) : Stack :=
- match inn with
- | [] => stack
- | i:: inn' => run_As inn' env (run_A i env stack)
- end.
-
-Definition pgm1 :=
-            [ push_const (res_nat 15);
-              push_var "x";
-              push_const (res_nat 7);
-              push_const (res_nat 2);
-              add
-              ].
-
-Compute run_As pgm1 (update (update env "x" default) "x" (res_nat 5)) nil.
-
-Fixpoint compile (a: AExp) : list A_Instruction :=
- match a with
- | anum n => [push_const (res_nat n)]
- | avar v => [push_var v]
- | aplus a1 a2 => (compile a1) ++ (compile a2) ++ [add]
- | amin a1 a2 =>(compile a1) ++ (compile a2) ++ [sub]
- | amul a1 a2 => (compile a1) ++ (compile a2) ++ [mul]
- | adiv a1 a2 => (compile a1) ++ (compile a2) ++ [div]
- | amod a1 a2 => (compile a1) ++ (compile a2) ++ [mod]
- | _ => []
-end.
-
-
-Compute compile (2 +' 5).
-Compute run_As (compile (2 +' 5)) env [] .
-
-
 
 
 Reserved Notation "A =[ S ]=> N" (at level 60).
@@ -512,6 +406,207 @@ Proof.
  -simpl.
  reflexivity.
 Qed.
+
+
+Inductive A_Instruction :=
+| push_const : Result -> A_Instruction
+| push_var : string -> A_Instruction
+| add : A_Instruction
+| sub : A_Instruction
+| mul : A_Instruction
+| div : A_Instruction
+| modd : A_Instruction
+| leng : A_Instruction
+| blt2 : A_Instruction
+| bgt2 : A_Instruction
+| bnot2 : A_Instruction
+| band2 : A_Instruction
+| bor2 : A_Instruction
+| bstr2 : A_Instruction.
+
+Require Import List.
+Open Scope list_scope.
+
+
+Module ListNotations.
+Notation "[ ]" := nil (format "[ ]") : list_scope.
+Notation "[ x ]" := (cons x nil) : list_scope.
+Notation "[ x ; y ; .. ; z ]" := (cons x (cons y .. (cons z nil) ..)) : list_scope.
+End ListNotations.
+
+Import ListNotations.
+
+
+
+Definition Stack := list Result.
+
+Definition run_A (inn: A_Instruction) (env: Env) (stack: Stack) : Stack :=
+ match inn with
+ | push_const c => (c::stack)
+ | push_var v => ((env v)::stack)
+ | add => match stack with
+          | n1 :: n2 :: stack' => match n1,n2,stack' with
+                                   | res_nat a1, res_nat a2,stack'' => ( res_nat (plus_ErrorNat a1 a2) )::stack''
+                                   | _,_,_ => stack'
+                                   end
+          | _ => stack
+           end
+ | sub => match stack with
+          | n1 :: n2 :: stack' => match n1,n2,stack' with
+                                   | res_nat a1, res_nat a2,stack'' => ( res_nat (sub_ErrorNat a1 a2) )::stack''
+                                   | _,_,_ => stack'
+                                   end
+          | _ => stack
+           end
+ | mul => match stack with
+          | n1 :: n2 :: stack' => match n1,n2,stack' with
+                                   | res_nat a1, res_nat a2,stack'' => ( res_nat (mul_ErrorNat a1 a2) )::stack''
+                                   | _,_,_ => stack'
+                                   end
+          | _ => stack
+           end
+ | div => match stack with
+          | n1 :: n2 :: stack' => match n1,n2,stack' with
+                                   | res_nat a1, res_nat a2,stack'' => ( res_nat (div_ErrorNat a1 a2) )::stack''
+                                   | _,_,_ => stack'
+                                   end
+          | _ => stack
+           end
+ | modd => match stack with
+          | n1 :: n2 :: stack' => match n1,n2,stack' with
+                                   | res_nat a1, res_nat a2,stack'' => ( res_nat (mod_ErrorNat a1 a2) )::stack''
+                                   | _,_,_ => stack'
+                                   end
+          | _ => stack
+           end
+ | leng => match stack with
+           | n1 :: stack' => ((res_nat(length_ErrorNat n1))::stack')
+           | _ => stack
+           end
+ | blt2 => match stack with
+           | n1 :: n2 :: stack' => match n1,n2,stack' with
+                                   | res_nat a1,res_nat a2, stack'' =>((res_bool(lt_ErrorBool a1 a2))::stack'')
+                                   | _,_,_ => stack'
+                                   end
+           | _ => stack
+           end
+ | bgt2 => match stack with
+           | n1 :: n2 :: stack' => match n1,n2,stack' with
+                                   | res_nat a1,res_nat a2, stack'' =>((res_bool(gt_ErrorBool a1 a2))::stack'')
+                                   | _,_,_ => stack'
+                                   end
+           | _ => stack
+           end
+ | bnot2 => match stack with
+           | n1 :: stack' => match n1,stack' with
+                             | res_bool a1,stack'' => ((res_bool(not_ErrorBool a1))::stack'')
+                             | _,_ => stack'
+                             end
+           | _ => stack
+           end
+ | band2 => match stack with
+           | n1 :: n2 :: stack' => match n1,n2,stack' with
+                                   | res_bool a1,res_bool a2, stack'' =>((res_bool(and_ErrorBool a1 a2))::stack'')
+                                   | _,_,_ => stack'
+                                   end
+           | _ => stack
+           end
+ | bor2 => match stack with
+           | n1 :: n2 :: stack' => match n1,n2,stack' with
+                                   | res_bool a1,res_bool a2, stack'' =>((res_bool(or_ErrorBool a1 a2))::stack'')
+                                   | _,_,_ => stack'
+                                   end
+           | _ => stack
+           end
+ | bstr2 => match stack with
+           | n1 :: n2 :: stack' => ((res_bool(res_ErrorBool n1 n2))::stack')
+           | _ => stack
+           end
+end.
+
+
+Compute (run_A (push_const (res_nat 10)) env [] ).
+Compute (run_A (push_var "x") (update (update env "x" default) "x" (res_nat 5)) nil ).
+Check [(res_nat 10);(res_nat 12)].
+Definition test: Stack:= (run_A (push_const(res_nat 12)) env (run_A (push_const (res_nat 10)) env nil)).
+Compute (run_A mul env test ).
+Compute (run_A blt2 env [res_nat 16;res_nat 15]).
+
+Fixpoint run_As (inn: list A_Instruction) (env: Env) (stack: Stack) : Stack :=
+ match inn with
+ | [] => stack
+ | i:: inn' => run_As inn' env (run_A i env stack)
+ end.
+
+Definition pgm1 :=
+            [ push_const (res_nat 15);
+              push_var "x";
+              leng;
+              push_const (res_nat 7);
+              push_const (res_nat 2);
+              add
+              ].
+
+Compute run_As pgm1 (update (update env "x" default) "x" (res_string "abcdefgh")) nil.
+
+
+
+Fixpoint Acompile (a:AExp) : list A_Instruction :=
+match a with
+            | anum n => [push_const (res_nat n)]
+            | avar v => [push_var v]
+            | aplus a1 a2 => (Acompile a1) ++ (Acompile  a2) ++ [add]
+            | amin a1 a2 =>(Acompile a1) ++ (Acompile a2) ++ [sub]
+            | amul a1 a2 => (Acompile  a1) ++ (Acompile a2) ++ [mul]
+            | adiv a1 a2 => (Acompile a1) ++ (Acompile  a2) ++ [div]
+            | amod a1 a2 => (Acompile a1) ++ (Acompile a2) ++ [modd]
+            | alength a1  => [push_var  a1] ++ [leng]
+end.
+
+Fixpoint Bcompile (b:BExp) : list A_Instruction :=
+match b with
+           | btrue => [push_const (res_bool true)]
+           | bfalse => [push_const (res_bool false)]
+           | berror => [push_const (res_bool error_bool)]
+           | bvar v => [push_var v]
+           | blt a1 a2 => (Acompile a1) ++ (Acompile a2) ++[bgt2]
+           | bgt a1 a2 => (Acompile a1) ++ (Acompile a2) ++[blt2]
+           | bor a1 a2 => (Bcompile a1) ++ (Bcompile a2) ++ [bor2]
+           | band a1 a2 => (Bcompile a1) ++ (Bcompile a2) ++ [band2]
+           | bnot a1 => (Bcompile a1) ++ [bnot2]
+           | bstr a1 a2 => [push_var a1] ++ [push_var a2] ++ [bstr2]
+end.
+
+Inductive EXPS :=
+| AAA : AExp ->EXPS
+| BBB : BExp ->EXPS.
+
+Definition compile (z: EXPS) : list A_Instruction :=
+ match z with
+ | AAA a => Acompile a
+ | BBB b => Bcompile b
+end.
+
+
+Compute compile (AAA (2 +' 5)).
+Compute run_As (compile (AAA(2 +' 5))) env [] .
+Compute compile (BBB (11 <' 10)).
+
+Compute compile (AAA (2 +' 10 +' "x")).
+
+Compute compile (BBB((5+'2) <' 10)) .
+Compute run_As (compile (BBB((5+'2) >' 10))) env [].
+
+(*
+Theorem Asoundness:
+ forall e env ,
+  run_As (compile e) env []=
+  [res_nat(aeval_fun e env)].
+Proof.
+ induction e;intros;simpl;trivial.
+ -Admitted.
+
+*)
 
 Inductive Stmt :=
   | nat_decl: string -> Stmt 
@@ -790,13 +885,6 @@ Case ('15) {' "b" :n= 15}
 }.
 
 Compute (eval_fun Checkq env 100) "b". 
-
-
-
-
-
-
-
 
 
 
